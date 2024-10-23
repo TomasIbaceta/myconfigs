@@ -181,6 +181,14 @@ require('lazy').setup({
     },
   },
 
+  {
+    'vim-scripts/DoxygenToolkit.vim',
+    config = function()
+      vim.g.DoxygenToolkit_authorName = 'Tomás Ibaceta'
+      vim.g.DoxygenToolkit_licenseTag = 'All Rights Reserved'
+    end,
+  },
+
   -- NOTE: Plugins can also be configured to run Lua code when they are loaded.
   --
   -- This is often very useful to both group configuration, as well as handle
@@ -462,6 +470,15 @@ require('lazy').setup({
           -- Find references for the word under your cursor.
           map('gr', require('telescope.builtin').lsp_references, '[G]oto [R]eferences')
 
+          -- This is where you add the new keybinding for function references
+          map('<leader>gr', function()
+            require('telescope.builtin').lsp_references {
+              layout_strategy = 'vertical',
+              layout_config = { width = 0.8 },
+              show_line = true,
+            }
+          end, '[G]oto [R]eferences')
+
           -- Jump to the implementation of the word under your cursor.
           --  Useful when your language has ways of declaring types without an actual implementation.
           map('gI', require('telescope.builtin').lsp_implementations, '[G]oto [I]mplementation')
@@ -552,8 +569,8 @@ require('lazy').setup({
         clangd = {
           cmd = { 'clangd', '--completion-style=detailed', '--header-insertion=never' },
         },
-        -- gopls = {},
-        -- pyright = {},
+        gopls = {},
+        pyright = {},
         -- rust_analyzer = {},
         -- ... etc. See `:help lspconfig-all` for a list of all the pre-configured LSPs
         --
@@ -857,7 +874,7 @@ require('lazy').setup({
   --  Here are some example plugins that I've included in the Kickstart repository.
   --  Uncomment any of the lines below to enable them (you will need to restart nvim).
   --
-  -- require 'kickstart.plugins.debug',
+  require 'kickstart.plugins.debug',
   -- require 'kickstart.plugins.indent_line',
   -- require 'kickstart.plugins.lint',
   require 'kickstart.plugins.autopairs',
@@ -1049,6 +1066,17 @@ vim.api.nvim_set_keymap('n', '<leader>h4', ':lua require("harpoon.ui").nav_file(
 
 -- Toggle nvim-tree with <leader>e
 vim.api.nvim_set_keymap('n', '<leader>e', ':NvimTreeToggle<CR>', { noremap = true, silent = true })
+
+-- For Normal mode "Alt+," to act as "f,"
+vim.keymap.set({ 'n', 'i' }, '<A-,>', function()
+  vim.cmd 'normal! f,'
+end, { noremap = true, silent = true, desc = 'Move to next comma' })
+
+-- For Normal mode "Shift+Alt+," to act as "F,"
+vim.keymap.set({ 'n', 'i' }, '<A-;>', function()
+  vim.cmd 'normal! F,'
+end, { noremap = true, silent = true, desc = 'Move to previous comma' })
+
 -- The line beneath this is called `modeline`. See `:help modeline`
 -- vim: ts=2 sts=2 sw=2 et
 --
@@ -1074,3 +1102,57 @@ require('nvim-autopairs').setup {
 }
 
 vim.lsp.set_log_level 'debug'
+
+-- ---------- Creating a Tiling Window with the function first line ---------
+local api = vim.api
+
+function ToggleFunctionSignature()
+  -- If the window is already open, close it
+  if _G.function_signature_win and api.nvim_win_is_valid(_G.function_signature_win) then
+    api.nvim_win_close(_G.function_signature_win, true)
+    _G.function_signature_win = nil
+    --print 'Function signature window closed'
+    return
+  end
+
+  -- Otherwise, show the function signature
+  local ts_utils = require 'nvim-treesitter.ts_utils'
+  local node = ts_utils.get_node_at_cursor()
+
+  -- Check if we found a valid node
+  if not node then
+    --print 'No node found'
+    return
+  end
+
+  -- Traverse upwards to find the function definition
+  while node do
+    if node:type() == 'function_definition' then
+      -- Get the start of the function
+      local start_row, _, _, _ = node:range()
+      local func_signature = vim.api.nvim_buf_get_lines(0, start_row, start_row + 1, false)[1]
+
+      -- Create a floating window to show the function signature
+      local win_opts = {
+        relative = 'editor',
+        width = #func_signature + 2,
+        height = 1,
+        row = 1, -- Top of the editor
+        col = 1, -- Left side of the editor
+        style = 'minimal',
+        border = 'single',
+      }
+
+      -- Create the buffer and window
+      local buf = api.nvim_create_buf(false, true)
+      api.nvim_buf_set_lines(buf, 0, -1, false, { func_signature })
+      _G.function_signature_win = api.nvim_open_win(buf, false, win_opts)
+      --print 'Function signature window opened'
+      return
+    end
+    node = node:parent()
+  end
+end
+
+-- Map the toggle function to a key, e.g., <leader>f
+vim.api.nvim_set_keymap('n', '<leader>of', ':lua ToggleFunctionSignature()<CR>', { noremap = true, silent = true })
