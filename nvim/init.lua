@@ -110,10 +110,10 @@ vim.keymap.set('t', '<Esc><Esc>', '<C-\\><C-n>', { desc = 'Exit terminal mode' }
 --  Use CTRL+<hjkl> to switch between windows
 --
 --  See `:help wincmd` for a list of all window commands
-vim.keymap.set('n', '<C-h>', '<C-w><C-h>', { desc = 'Move focus to the left window' })
-vim.keymap.set('n', '<C-l>', '<C-w><C-l>', { desc = 'Move focus to the right window' })
-vim.keymap.set('n', '<C-j>', '<C-w><C-j>', { desc = 'Move focus to the lower window' })
-vim.keymap.set('n', '<C-k>', '<C-w><C-k>', { desc = 'Move focus to the upper window' })
+vim.keymap.set('n', '<C-h>', '<C-w>h', { desc = 'Move focus to the left window' })
+vim.keymap.set('n', '<C-l>', '<C-w>l', { desc = 'Move focus to the right window' })
+vim.keymap.set('n', '<C-j>', '<C-w>j', { desc = 'Move focus to the lower window' })
+vim.keymap.set('n', '<C-k>', '<C-w>k', { desc = 'Move focus to the upper window' })
 
 -- [[ Basic Autocommands ]]
 --  See `:help lua-guide-autocommands`
@@ -179,6 +179,11 @@ require('lazy').setup({
         changedelete = { text = '~' },
       },
     },
+  },
+
+  { --syntax highlighting for php blade
+    'jwalton512/vim-blade',
+    ft = 'blade', -- Load only for Blade files
   },
 
   {
@@ -322,7 +327,11 @@ require('lazy').setup({
         --     i = { ['<c-enter>'] = 'to_fuzzy_refine' },
         --   },
         -- },
-        -- pickers = {}
+        pickers = {
+          lsp_document_symbols = {
+            symbol_sort = false,
+          },
+        },
         extensions = {
           ['ui-select'] = {
             require('telescope.themes').get_dropdown(),
@@ -338,10 +347,28 @@ require('lazy').setup({
       local builtin = require 'telescope.builtin'
       vim.keymap.set('n', '<leader>sh', builtin.help_tags, { desc = '[S]earch [H]elp' })
       vim.keymap.set('n', '<leader>sk', builtin.keymaps, { desc = '[S]earch [K]eymaps' })
+
       vim.keymap.set('n', '<leader>sf', builtin.find_files, { desc = '[S]earch [F]iles' })
+      vim.keymap.set('n', '<leader>sF', function()
+        builtin.find_files {
+          hidden = true,
+          no_ignore = true,
+          no_ignore_parent = true,
+        }
+      end, { desc = '[S]earch [F]iles (all)' })
+
       vim.keymap.set('n', '<leader>ss', builtin.builtin, { desc = '[S]earch [S]elect Telescope' })
       vim.keymap.set('n', '<leader>sw', builtin.grep_string, { desc = '[S]earch current [W]ord' })
+
       vim.keymap.set('n', '<leader>sg', builtin.live_grep, { desc = '[S]earch by [G]rep' })
+      vim.keymap.set('n', '<leader>sG', function()
+        builtin.live_grep {
+          additional_args = function()
+            return { '--hidden', '--no-ignore', '--no-ignore-parent' }
+          end,
+        }
+      end, { desc = '[S]earch by [G]rep (all files)' })
+
       vim.keymap.set('n', '<leader>sd', builtin.diagnostics, { desc = '[S]earch [D]iagnostics' })
       vim.keymap.set('n', '<leader>sr', builtin.resume, { desc = '[S]earch [R]esume' })
       vim.keymap.set('n', '<leader>s.', builtin.oldfiles, { desc = '[S]earch Recent Files ("." for repeat)' })
@@ -378,7 +405,11 @@ require('lazy').setup({
       'kyazdani42/nvim-web-devicons', -- optional, for file icons
     },
     config = function()
-      require('nvim-tree').setup {}
+      require('nvim-tree').setup {
+        filters = {
+          dotfiles = false, -- Set this to `false` to show hidden files
+        },
+      }
     end,
   },
 
@@ -387,6 +418,34 @@ require('lazy').setup({
     requires = { 'nvim-lua/plenary.nvim' },
     config = function()
       require('harpoon').setup {}
+    end,
+  },
+
+  {
+    'kylechui/nvim-surround',
+    version = '*', -- For stability; remove this line for the latest version
+    config = function()
+      require('nvim-surround').setup {
+        surrounds = {
+          ['['] = { add = { '[', ']' } }, -- No spaces for square brackets
+          ['('] = { add = { '(', ')' } }, -- No spaces for parentheses
+          ['{'] = { add = { '{', '}' } }, -- No spaces for curly brackets
+        },
+      }
+    end,
+  },
+
+  {
+    'stevearc/aerial.nvim',
+    opts = {},
+    dependencies = { 'nvim-treesitter/nvim-treesitter', 'nvim-lspconfig' },
+    config = function()
+      require('aerial').setup {
+        layout = {
+          default_direction = 'prefer_right', -- or "prefer_left"
+          placement = 'window', -- ensures it's a regular split, not a float
+        },
+      }
     end,
   },
 
@@ -567,10 +626,54 @@ require('lazy').setup({
       --        For example, to see the options for `lua_ls`, you could go to: https://luals.github.io/wiki/settings/
       local servers = {
         clangd = {
-          cmd = { 'clangd', '--completion-style=detailed', '--header-insertion=never' },
+          cmd = { 'clangd', '--enable-config', '--completion-style=detailed', '--header-insertion=never', '--query-driver=/usr/bin/arm-none-eabi-gcc' },
         },
         gopls = {},
-        pyright = {},
+
+        -- tsserver = {},
+        ts_ls = {},
+        tailwindcss = {},
+        eslint = {},
+
+        -- HTML support (needed for HTML blocks inside JSX)
+        --html = {
+        --  filetypes = { 'html', 'htm', 'javascriptreact', 'typescriptreact' },
+        --},
+
+        intelephense = {
+          filetypes = { 'php' },
+        },
+
+        html = {
+          filetypes = { 'html', 'htm', 'blade' },
+          init_options = {
+            provideFormatter = true, -- Enable formatting
+          },
+        },
+
+        -- Vue + Blade (if the project uses Vue components)
+        volar = {
+          filetypes = { 'vue', 'blade', 'javascript', 'typescript' },
+        },
+
+        -- Emmet for HTML-like syntax in React components
+        emmet_ls = {
+          filetypes = { 'html', 'css', 'javascriptreact', 'typescriptreact', 'blade' },
+        },
+
+        pyright = {
+          settings = {
+            python = {
+              analysis = {
+                typeCheckingMode = 'basic', -- Change to "basic" or "off"
+                autoSearchPaths = true,
+                useLibraryCodeForTypes = true,
+                diagnosticMode = 'workspace',
+                venv = '.venv',
+              },
+            },
+          },
+        },
         -- rust_analyzer = {},
         -- ... etc. See `:help lspconfig-all` for a list of all the pre-configured LSPs
         --
@@ -648,7 +751,7 @@ require('lazy').setup({
         -- Disable "format_on_save lsp_fallback" for languages that don't
         -- have a well standardized coding style. You can add additional
         -- languages here or re-enable it for the disabled ones.
-        local disable_filetypes = { c = true, cpp = true }
+        local disable_filetypes = { c = false, cpp = false }
         return {
           timeout_ms = 500,
           lsp_fallback = not disable_filetypes[vim.bo[bufnr].filetype],
@@ -656,9 +759,9 @@ require('lazy').setup({
       end,
       formatters_by_ft = {
         lua = { 'stylua' },
-        -- Conform can also run multiple formatters sequentially
-        -- python = { "isort", "black" },
-        --
+        c = { 'clang_format' },
+        cpp = { 'clang_format' },
+        python = { 'black' },
         -- You can use 'stop_after_first' to run the first available formatter from the list
         -- javascript = { "prettierd", "prettier", stop_after_first = true },
       },
@@ -685,12 +788,18 @@ require('lazy').setup({
           -- `friendly-snippets` contains a variety of premade snippets.
           --    See the README about individual language/framework/plugin snippets:
           --    https://github.com/rafamadriz/friendly-snippets
-          -- {
-          --   'rafamadriz/friendly-snippets',
-          --   config = function()
-          --     require('luasnip.loaders.from_vscode').lazy_load()
-          --   end,
-          -- },
+          {
+            'rafamadriz/friendly-snippets',
+            config = function()
+              require('luasnip.loaders.from_vscode').lazy_load()
+              require('luasnip.loaders.from_vscode').lazy_load {
+                -- paths = { '~/.config/nvim/snippets' }, -- Add your custom snippets directory here
+                -- paths = { vim.fn.expand '~/.config/nvim/snippets' },
+                paths = { vim.fn.expand '/home/zeta/.config/nvim/snippets' },
+              }
+              --require('luasnip').filetype_extend('all', { '_' })
+            end,
+          },
         },
       },
       'saadparwaiz1/cmp_luasnip',
@@ -745,24 +854,21 @@ require('lazy').setup({
           --  completions whenever it has completion options available.
           ['<C-Space>'] = cmp.mapping.complete {},
 
-          -- Think of <c-l> as moving to the right of your snippet expansion.
-          --  So if you have a snippet that's like:
-          --  function $name($args)
-          --    $body
-          --  end
+          --          ['<C-l>'] = cmp.mapping(function(fallback)
+          --            if luasnip.expand_or_locally_jumpable() then
+          --              luasnip.expand_or_jump()
+          --            else
+          --              fallback()
+          --            end
+          --          end, { 'i', 's' }),
           --
-          -- <c-l> will move you to the right of each of the expansion locations.
-          -- <c-h> is similar, except moving you backwards.
-          ['<C-l>'] = cmp.mapping(function()
-            if luasnip.expand_or_locally_jumpable() then
-              luasnip.expand_or_jump()
-            end
-          end, { 'i', 's' }),
-          ['<C-h>'] = cmp.mapping(function()
-            if luasnip.locally_jumpable(-1) then
-              luasnip.jump(-1)
-            end
-          end, { 'i', 's' }),
+          --          ['<C-h>'] = cmp.mapping(function(fallback)
+          --            if luasnip.locally_jumpable(-1) then
+          --              luasnip.jump(-1)
+          --            else
+          --              fallback()
+          --            end
+          --          end, { 'i', 's' }),
 
           -- For more advanced Luasnip keymaps (e.g. selecting choice nodes, expansion) see:
           --    https://github.com/L3MON4D3/LuaSnip?tab=readme-ov-file#keymaps
@@ -865,6 +971,40 @@ require('lazy').setup({
     --    - Treesitter + textobjects: https://github.com/nvim-treesitter/nvim-treesitter-textobjects
   },
 
+  --  -- ---------- add pydoc generation with neogen ---------
+  -- didn't work, who knows why
+  --  {
+  --    'danymat/neogen',
+  --    dependencies = 'nvim-treesitter/nvim-treesitter',
+  --    config = function()
+  --      require('neogen').setup {
+  --        enabled = true,
+  --        snippet_engine = 'luasnip',
+  --        languages = {
+  --          python = {
+  --            template = {
+  --              annotation_convention = 'google',
+  --            },
+  --          },
+  --        },
+  --        default_template_type = 'google', -- Force default template type
+  --      }
+  --      vim.keymap.set('n', '<Leader>pp', ':Neogen<CR>', { noremap = true, silent = true })
+  --    end,
+  --  },
+
+  {
+    'heavenshell/vim-pydocstring',
+    enabled = false,
+    build = 'make install', -- Installs dependencies
+    config = function()
+      vim.g.pydocstring_doq_path = 'pydocstring' -- Ensure it's using the installed package
+      vim.g.pydocstring_formatter = 'google' -- Set Google-style docstrings
+      vim.g.pydocstring_doq_path = 'doq'
+      vim.api.nvim_set_keymap('n', '<Leader>pp', ':Pydocstring<CR>', { noremap = true, silent = true })
+    end,
+  },
+
   -- The following two comments only work if you have downloaded the kickstart repo, not just copy pasted the
   -- init.lua. If you want these files, they are in the repository, so you can just download them and
   -- place them in the correct locations.
@@ -959,7 +1099,10 @@ function ToggleSourceHeader()
     end
   else
     print 'Not a C/C++ file'
-    return
+    return {
+      'jwalton512/vim-blade',
+      ft = 'blade',
+    }
   end
 
   if vim.fn.filereadable(counterpart) == 1 then
@@ -1079,6 +1222,7 @@ end, { noremap = true, silent = true, desc = 'Move to previous comma' })
 
 -- The line beneath this is called `modeline`. See `:help modeline`
 -- vim: ts=2 sts=2 sw=2 et
+vim.opt.modeline = false
 --
 -- my settings for tabs
 vim.opt.tabstop = 4
@@ -1156,3 +1300,78 @@ end
 
 -- Map the toggle function to a key, e.g., <leader>f
 vim.api.nvim_set_keymap('n', '<leader>of', ':lua ToggleFunctionSignature()<CR>', { noremap = true, silent = true })
+
+-- ---------- copy the relative path to the file i'm currently watching ---------
+
+-- Function to copy the relative path of the current file to clipboard
+vim.keymap.set('n', '<leader>yp', function()
+  -- Get the relative path of the current file
+  local relative_path = vim.fn.expand '%'
+  if relative_path == '' then
+    print 'No file is currently open!'
+    return
+  end
+
+  -- Copy to the system clipboard
+  vim.fn.setreg('+', relative_path)
+
+  -- Print a message to confirm
+  print('Copied to clipboard: ' .. relative_path)
+end, { desc = 'Copy relative path to clipboard' })
+
+-- ---------- toggle "view ignored files"---------
+-- this is good to open .envs, for example.
+vim.keymap.set('n', '<leader>tg', function()
+  require('nvim-tree.api').tree.toggle_gitignore_filter()
+  print 'Toggled .gitignore filter'
+end, { desc = 'Toggle .gitignore filter in NvimTree' })
+
+-- run black on current file
+vim.api.nvim_set_keymap('n', '<Leader>fb', ':!black #<CR>', { noremap = true, silent = true })
+
+-- next method (python nav)
+--
+--
+--aerial sidebar
+
+vim.keymap.set('n', '<leader>oo', '<cmd>AerialToggle!<CR>', { desc = 'Toggle Aerial outline' })
+
+-- ---------- log level ---------- **/
+vim.lsp.set_log_level 'WARN' --not too big or it will eat disk
+
+-- -------- debug as ipython -----
+vim.keymap.set('n', '<leader>dp', function()
+  local file = vim.fn.expand '%:p' -- full path of the file
+  local line = vim.fn.line '.' -- current line number
+  local win_name = 'ipython_debug_' .. tostring(os.time()) -- unique name
+
+  -- Step 1: Create a new named tmux window and switch to it
+  local create_and_select = string.format([[tmux new-window -n %s "source .venv/bin/activate && bash -i"]], win_name)
+  vim.fn.system(create_and_select)
+
+  -- Step 2: Send keys to the new window (now current)
+  local debug_cmd = string.format([[tmux send-keys -t %s 'ipython' C-m '%%run -d %s' C-m 'b %d' C-m 'c' C-m]], win_name, file, line)
+  vim.fn.system(debug_cmd)
+end, { desc = 'Open tmux window and debug with IPython' })
+
+-- ---------- format clang-format ---------- --
+
+vim.keymap.set('n', '<leader>fc', function()
+  local filename = vim.api.nvim_buf_get_name(0)
+  if filename:match '%.c$' or filename:match '%.h$' then
+    vim.cmd 'write' -- Save file before formatting
+    vim.cmd('!clang-format -i ' .. filename)
+    vim.cmd 'edit' -- Reload buffer after formatting
+  else
+    print 'Not a .c or .h file — skipping clang-format'
+  end
+end, { noremap = true, silent = true, desc = 'Clang-format current file' })
+
+-- -------- sorround script -------
+return {
+  'kylechui/nvim-surround',
+  version = '*',
+  config = function()
+    require('nvim-surround').setup()
+  end,
+}
